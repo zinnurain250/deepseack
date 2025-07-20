@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Courier Order Tracker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/style.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="search-box">
+            <h3 class="text-center mb-4">Courier Order Tracker</h3>
+            <div class="input-group mb-3">
+                <input type="text" id="phoneNumber" class="form-control" placeholder="Enter phone number..." aria-label="Phone number">
+                <button class="btn btn-primary" type="button" id="searchBtn">Search</button>
+            </div>
+            <div class="text-center">
+                <small class="text-muted">Example: 6174282257</small>
+            </div>
+        </div>
+
+        <div class="result-card" id="resultSection" style="display: none;">
+            <h4 class="text-center mb-4" id="resultTitle"></h4>
+            
+            <div class="summary-card">
+                <h5>Overall Summary</h5>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="d-flex justify-content-between">
+                            <span>Total Orders:</span>
+                            <span id="totalOrders">0</span>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex justify-content-between">
+                            <span>Successful Orders:</span>
+                            <span id="successOrders">0</span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-success" id="successBar" role="progressbar"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex justify-content-between">
+                            <span>Cancelled Orders:</span>
+                            <span id="cancelOrders">0</span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-danger" id="cancelBar" role="progressbar"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Courier</th>
+                            <th>Total Orders</th>
+                            <th>Successful</th>
+                            <th>Cancelled</th>
+                            <th>Success Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultTable">
+                        <!-- Results will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('searchBtn').addEventListener('click', async function() {
+            const phoneNumber = document.getElementById('phoneNumber').value.trim();
+            
+            if (!phoneNumber || !/^[0-9]+$/.test(phoneNumber)) {
+                alert('Please enter a valid phone number (digits only)');
+                return;
+            }
+
+            const searchBtn = document.getElementById('searchBtn');
+            searchBtn.disabled = true;
+            searchBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Searching...';
+
+            try {
+                const response = await fetch(`/api/check?phone=${encodeURIComponent(phoneNumber)}`);
+                const data = await response.json();
+                
+                if (data.error || data.status !== 'success') {
+                    throw new Error(data.error || 'Invalid response from server');
+                }
+                
+                displayResults(data);
+            } catch (error) {
+                alert('Error: ' + error.message);
+                console.error(error);
+            } finally {
+                searchBtn.disabled = false;
+                searchBtn.textContent = 'Search';
+            }
+        });
+
+        function displayResults(data) {
+            const resultSection = document.getElementById('resultSection');
+            const resultTitle = document.getElementById('resultTitle');
+            const resultTable = document.getElementById('resultTable');
+            
+            resultTitle.textContent = `Order history for: ${data.phone || document.getElementById('phoneNumber').value}`;
+            resultTable.innerHTML = '';
+            
+            // Update summary
+            const summary = data.data?.summary || {
+                total_parcel: 0,
+                success_parcel: 0,
+                cancelled_parcel: 0,
+                success_ratio: 0
+            };
+            
+            document.getElementById('totalOrders').textContent = summary.total_parcel;
+            document.getElementById('successOrders').textContent = `${summary.success_parcel} (${summary.success_ratio.toFixed(2)}%)`;
+            document.getElementById('cancelOrders').textContent = summary.cancelled_parcel;
+            
+            document.getElementById('successBar').style.width = `${summary.success_ratio}%`;
+            document.getElementById('cancelBar').style.width = `${100 - summary.success_ratio}%`;
+            
+            // Display courier data
+            if (data.data) {
+                const couriers = [
+                    data.data.pathao,
+                    data.data.steadfast,
+                    data.data.parceldex,
+                    data.data.redx,
+                    data.data.paperfly
+                ].filter(courier => courier && courier.total_parcel > 0);
+                
+                if (couriers.length === 0) {
+                    resultTable.innerHTML = '<tr><td colspan="5" class="text-center">No order history found for this number</td></tr>';
+                } else {
+                    couriers.forEach(courier => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>
+                                <img src="${courier.logo}" alt="${courier.name}" class="courier-logo">
+                                ${courier.name}
+                            </td>
+                            <td>${courier.total_parcel}</td>
+                            <td>${courier.success_parcel}</td>
+                            <td>${courier.cancelled_parcel}</td>
+                            <td>
+                                <div class="progress">
+                                    <div class="progress-bar bg-success" role="progressbar" 
+                                         style="width: ${courier.success_ratio}%">
+                                    </div>
+                                </div>
+                                ${courier.success_ratio.toFixed(2)}%
+                            </td>
+                        `;
+                        resultTable.appendChild(row);
+                    });
+                }
+            }
+            
+            resultSection.style.display = 'block';
+            resultSection.scrollIntoView({ behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>
